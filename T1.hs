@@ -8,14 +8,14 @@ import Data.List (intercalate)
 -- ==========================================
 
 data Cell 
-    = Empty 
-    | Val Int 
-    | Block 
-    | BlockSum Int
-    deriving (Eq, Show)
+    = Empty -- casa vazia pra colocar um numero
+    | Val Int -- casa com um numero
+    | Block -- bloco preto
+    | BlockSum Int -- bloco preto com dica de soma
+    deriving (Eq, Show) 
 
-type Pos = (Int, Int)
-type Board = M.Map Pos Cell
+type Pos = (Int, Int) -- criacao de tipo pra coordenadas
+type Board = M.Map Pos Cell -- 
 
 -- ==========================================
 -- 1. Utilitários e Inicialização
@@ -38,7 +38,7 @@ toBoard rows = M.fromList
 -- ==========================================
 -- 2. Motor de Busca Backtracking (Sem Monads)
 -- ==========================================
-
+-- funcao que prepara o tabuleiro
 solveKakkuru :: [[Cell]] -> [Board]
 solveKakkuru grid = solve (toBoard grid) (getN grid)
 
@@ -60,9 +60,7 @@ solve board n = go emptyPositions board
             
         in concat (map continuarBusca tentativasValidas)
 
--- ==========================================
--- 3. Regras e Validações
--- ==========================================
+--VALIDACOES ABAIXO
 
 isValid :: Board -> Int -> Pos -> Bool
 isValid b n (r, c) =
@@ -71,17 +69,20 @@ isValid b n (r, c) =
     in case valCell of
         Just (Val val) -> isUniqueInRow b r val && isUniqueInCol b c val && partialSumsOk b n
         _ -> False
-
+        
+--verfica se o numero (val) nao se repete na linha
 isUniqueInRow :: Board -> Int -> Int -> Bool
 isUniqueInRow b r val =
     let naLinha = filter (\((r', _), cell) -> r' == r && cell == Val val) (M.toList b)
     in length naLinha == 1
-
+    
+--verfica se o numero (val) nao se repete na coluna
 isUniqueInCol :: Board -> Int -> Int -> Bool
 isUniqueInCol b c val =
     let naColuna = filter (\((_, c'), cell) -> c' == c && cell == Val val) (M.toList b)
     in length naColuna == 1
-
+    
+--vai atrás dos "BlockSum" e utiliza a funçao checkSum para verificar se ta correto
 partialSumsOk :: Board -> Int -> Bool
 partialSumsOk b n =
     let blocos = filter isBlockSum (M.toList b)
@@ -92,7 +93,8 @@ partialSumsOk b n =
     
     verificaTodos [] = True
     verificaTodos (bloco:resto) = checkSum b n bloco && verificaTodos resto
-
+    
+--verifica se a soma em volta de um "BlockSum" está correta
 checkSum :: Board -> Int -> (Pos, Cell) -> Bool
 checkSum b n (p, BlockSum target) =
     let 
@@ -105,6 +107,7 @@ checkSum b n (p, BlockSum target) =
        else currentSum + (empties * 1) <= target && currentSum + (empties * n) >= target
 checkSum _ _ _ = True
 
+--pega as 8 casas vizinhas de uma certa posicao
 getNeighbors :: Pos -> Board -> [Cell]
 getNeighbors (r, c) b =
     let posicoes = [(nr, nc) | nr <- [r-1 .. r+1], nc <- [c-1 .. c+1], (nr, nc) /= (r, c)]
@@ -112,16 +115,14 @@ getNeighbors (r, c) b =
         celulasValidas = [celula | Just celula <- celulas]
     in filter isWhiteOrEmpty celulasValidas
 
--- ==========================================
--- 4. Funções de Impressão e Main
--- ==========================================
-
+--converte cada casa numa string
 formatCell :: Cell -> String
 formatCell Empty        = "   "
 formatCell (Val v)      = " " ++ show v ++ " "
 formatCell Block        = "[B]"
 formatCell (BlockSum s) = "[B" ++ show s ++ "]"
 
+--imprime linha por linha 
 printBoard :: Int -> Int -> Board -> IO ()
 printBoard rows cols b = mapM_ putStrLn 
     [ intercalate " | " [ formatCell (b M.! (r, c)) | c <- [0..cols-1] ]
@@ -130,17 +131,21 @@ printBoard rows cols b = mapM_ putStrLn
 main :: IO ()
 main = do
     let example = [
-            [Empty, BlockSum 4, Empty, BlockSum 4],
-            [BlockSum 4, Empty, BlockSum 6, Empty],
-            [Empty, BlockSum 6, BlockSum 7, Empty],
-            [BlockSum 4, Empty, Empty, BlockSum 2]
+            [Empty, BlockSum 11, BlockSum 9, Empty, BlockSum 14, Empty, Empty, Empty],
+            [Empty, Empty, Empty, BlockSum 17, Empty, Empty, BlockSum 18, BlockSum 12],
+            [Empty, BlockSum 17, BlockSum 18, Empty, Empty, BlockSum 14, Empty, Empty],
+            [BlockSum 12, Empty, BlockSum 16, Empty, BlockSum 16, Empty, Empty, Empty],
+            [Empty, Empty, Empty, BlockSum 15, Empty, BlockSum 16, Empty, BlockSum 9],
+            [BlockSum 12, Empty, Empty, Empty, BlockSum 10, Empty, BlockSum 18, Empty],
+            [Empty, BlockSum 20, Empty, BlockSum 20, Empty, BlockSum 16, Empty, Empty],
+            [BlockSum 6, Empty, Empty, Empty, Empty, Empty, BlockSum 11, BlockSum 9]
           ]
     
     putStrLn "=== Resolvendo Kakkuru (Haskell Clássico) ===\n"
     let solutions = solveKakkuru example
     
     if null solutions
-        then putStrLn "❌ Nenhuma solução encontrada."
+        then putStrLn "Nenhuma solução encontrada."
         else do
-            putStrLn "✅ Solução Encontrada:"
-            printBoard 4 4 (head solutions)
+            putStrLn "Solução Encontrada:"
+            printBoard 8 8 (head solutions)
