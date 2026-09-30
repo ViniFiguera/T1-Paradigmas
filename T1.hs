@@ -14,33 +14,33 @@ data Celula
     | BlocoSoma Int  -- bloco preto com dica de soma
     deriving (Eq, Show) 
 
-type Coordenada = (Int, Int) 
-type Tabuleiro = M.Map Coordenada Celula 
+type Coordenada = (Int, Int) --criamos um novo tipo (linha,coluna)
+type Tabuleiro = M.Map Coordenada Celula --tabuleiro é um dicionario com Coordenada e Celula (tipo de casa)
 
--- ==========================================
--- 1. Utilitários e Inicialização
--- ==========================================
+-- essa funcao verifica se a casa eh jogavel ou nao(recebe numero ou nao)
+ehBrancaOuVazia :: Celula -> Bool --criamos uma funcao q recebe um tipo celula e retorna um bool
+ehBrancaOuVazia Vazia     = True -- se é uma casa vazia, retorna true
+ehBrancaOuVazia (Valor _) = True -- se for uma casa de numero(valor) retorna True
+ehBrancaOuVazia _         = False -- se for qualquer outra coisa retorna False
 
--- Verifica se uma célula é válida para receber verificação (não é bloco preto)
-ehBrancaOuVazia :: Celula -> Bool
-ehBrancaOuVazia Vazia     = True
-ehBrancaOuVazia (Valor _) = True
-ehBrancaOuVazia _         = False
+-- funcao que verifica o numero maximo permitido (depende do numero de casa jogaveis)
+descobrirNMaximo :: [[Celula]] -> Int --recebe lista de listas das casas e retorna int
+descobrirNMaximo grade = length (filter ehBrancaOuVazia (head grade)) --filter devolve uma lista menor
+--head devolve o primeiro item da lista grade (pega uma linha apenas) e length pega a quantidade de casa branca/vazia
 
--- Descobre o limite máximo (N) de números permitidos
-descobrirNMaximo :: [[Celula]] -> Int
-descobrirNMaximo grade = maximum (map (\linha -> length (filter ehBrancaOuVazia linha)) grade)
-
--- Converte a matriz de listas para um Dicionário (Map) usando coordenadas
 criarTabuleiro :: [[Celula]] -> Tabuleiro
-criarTabuleiro linhas = M.fromList
-    [ ((lin, col), celula)
-    | (lin, linha) <- zip [0..] linhas
-    , (col, celula) <- zip [0..] linha ]
+criarTabuleiro grade = M.fromList coordenadasFinais
+  where
+    -- numera cada linha do tabuleiro tipo [(0, BlocoPreto, Vazia), (1, Vazia, Vazia), ...]
+    linhasNumeradas = zip [0..] grade
+    
+    -- numera cada coluna e junta para fazer a coordenada da casa
+    numerarCelulasDaLinha (numeroDaLinha, linha) = 
+        [ ((numeroDaLinha, numeroDaColuna), celula) | (numeroDaColuna, celula) <- zip [0..] linha ]
+        
+    -- junta tudo numa lista só por concatenacao
+    coordenadasFinais = concat (map numerarCelulasDaLinha linhasNumeradas)
 
--- ==========================================
--- 2. Motor de Busca Backtracking 
--- ==========================================
 
 -- Função principal que prepara o tabuleiro para a busca
 resolverSummen :: [[Celula]] -> [Tabuleiro]
@@ -50,19 +50,27 @@ resolverSummen grade = tentarResolver (criarTabuleiro grade) (descobrirNMaximo g
 tentarResolver :: Tabuleiro -> Int -> [Tabuleiro]
 tentarResolver tab nMaximo = preencherPosicoes posicoesVazias tab
   where
+    --procura casa vazia e coloca numa lista pra resolver depois
     posicoesVazias = [coord | (coord, Vazia) <- M.toList tab]
-
+    
+    --recebe tabuleiro e lista de coordenadas vazias, DEVOLVE LISTA DE TABULEIROS! (considerados possibilidades)
     preencherPosicoes :: [Coordenada] -> Tabuleiro -> [Tabuleiro]
+    
+    --se lista de vazias acabou, deu certo!
     preencherPosicoes [] tabAtual = [tabAtual] 
     preencherPosicoes (coordAtual:proximasCoords) tabAtual = 
         let 
+            --gera jogadas inserindo numero de 1 ate o maximo na casa atual
             gerarTentativa = \num -> M.insert coordAtual (Valor num) tabAtual
+            
             todasTentativas = map gerarTentativa [1..nMaximo]
             
+            --filtra as jogadas invalidas, deixa apenas as que deram certo ate agora
             tentativasValidas = filter (\tabTeste -> ehJogadaValida tabTeste nMaximo coordAtual) todasTentativas
             
             continuarBusca = \tabValido -> preencherPosicoes proximasCoords tabValido
             
+        --junta as tentativas que conseguiram chegar no fim
         in concat (map continuarBusca tentativasValidas)
 
 -- ==========================================
