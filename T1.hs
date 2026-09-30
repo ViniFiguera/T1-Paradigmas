@@ -3,16 +3,12 @@ module Main where
 import qualified Data.Map as M
 import Data.List (intercalate)
 
--- ==========================================
--- 0. Definições de Tipos
--- ==========================================
-
 data Celula 
     = Vazia          -- casa vazia para colocar um numero
     | Valor Int      -- casa preenchida com um numero
     | BlocoPreto     -- bloco preto sem dica
     | BlocoSoma Int  -- bloco preto com dica de soma
-    deriving (Eq, Show) 
+    deriving (Eq, Show) -- para poder usar operacoes de igualdade e pode converter pra texto
 
 type Coordenada = (Int, Int) --criamos um novo tipo (linha,coluna)
 type Tabuleiro = M.Map Coordenada Celula --tabuleiro é um dicionario com Coordenada e Celula (tipo de casa)
@@ -28,8 +24,8 @@ descobrirNMaximo :: [[Celula]] -> Int --recebe lista de listas das casas e retor
 descobrirNMaximo grade = length (filter ehBrancaOuVazia (head grade)) --filter devolve uma lista menor
 --head devolve o primeiro item da lista grade (pega uma linha apenas) e length pega a quantidade de casa branca/vazia
 
-criarTabuleiro :: [[Celula]] -> Tabuleiro
-criarTabuleiro grade = M.fromList coordenadasFinais
+criarTabuleiro :: [[Celula]] -> Tabuleiro -- pega a matriz de celulas e retorna tabuleiro
+criarTabuleiro grade = M.fromList coordenadasFinais --retorna grade, e transforma coordenadas finais num dicionario
   where
     -- numera cada linha do tabuleiro tipo [(0, BlocoPreto, Vazia), (1, Vazia, Vazia), ...]
     linhasNumeradas = zip [0..] grade
@@ -41,23 +37,22 @@ criarTabuleiro grade = M.fromList coordenadasFinais
     -- junta tudo numa lista só por concatenacao
     coordenadasFinais = concat (map numerarCelulasDaLinha linhasNumeradas)
 
-
--- Função principal que prepara o tabuleiro para a busca
+--
 resolverSummen :: [[Celula]] -> [Tabuleiro]
-resolverSummen grade = tentarResolver (criarTabuleiro grade) (descobrirNMaximo grade)
+resolverSummen grade = tentarResolver (criarTabuleiro grade) (descobrirNMaximo grade) --tentar resolver recebe o retorno de duas funcoes, e guarda em grade o [Tabuleiro]
 
 -- Motor de tentativa e erro (Backtracking)
-tentarResolver :: Tabuleiro -> Int -> [Tabuleiro]
-tentarResolver tab nMaximo = preencherPosicoes posicoesVazias tab
+tentarResolver :: Tabuleiro -> Int -> [Tabuleiro] --confuso, mas ele apenas pega tabuleiro e um int, e retorna numa lista de tabuleiros
+tentarResolver tab nMaximo = preencherPosicoes posicoesVazias tab -- a funcao preencher posicoes recebe como parametro posicoes vazias e tab, retornando tab e nMaximo
   where
     --procura casa vazia e coloca numa lista pra resolver depois
-    posicoesVazias = [coord | (coord, Vazia) <- M.toList tab]
+    posicoesVazias = [coord | (coord, Vazia) <- M.toList tab] 
     
     --recebe tabuleiro e lista de coordenadas vazias, DEVOLVE LISTA DE TABULEIROS! (considerados possibilidades)
     preencherPosicoes :: [Coordenada] -> Tabuleiro -> [Tabuleiro]
     
     --se lista de vazias acabou, deu certo!
-    preencherPosicoes [] tabAtual = [tabAtual] 
+    preencherPosicoes [] tabAtual = [tabAtual] --verifica 
     preencherPosicoes (coordAtual:proximasCoords) tabAtual = 
         let 
             --gera jogadas inserindo numero de 1 ate o maximo na casa atual
