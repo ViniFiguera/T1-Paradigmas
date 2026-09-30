@@ -7,145 +7,159 @@ import Data.List (intercalate)
 -- 0. Definições de Tipos
 -- ==========================================
 
-data Cell 
-    = Empty -- casa vazia pra colocar um numero
-    | Val Int -- casa com um numero
-    | Block -- bloco preto
-    | BlockSum Int -- bloco preto com dica de soma
+data Celula 
+    = Vazia          -- casa vazia para colocar um numero
+    | Valor Int      -- casa preenchida com um numero
+    | BlocoPreto     -- bloco preto sem dica
+    | BlocoSoma Int  -- bloco preto com dica de soma
     deriving (Eq, Show) 
 
-type Pos = (Int, Int) -- criacao de tipo pra coordenadas
-type Board = M.Map Pos Cell -- 
+type Coordenada = (Int, Int) 
+type Tabuleiro = M.Map Coordenada Celula 
 
 -- ==========================================
 -- 1. Utilitários e Inicialização
 -- ==========================================
 
-isWhiteOrEmpty :: Cell -> Bool
-isWhiteOrEmpty Empty   = True
-isWhiteOrEmpty (Val _) = True
-isWhiteOrEmpty _       = False
+-- Verifica se uma célula é válida para receber verificação (não é bloco preto)
+ehBrancaOuVazia :: Celula -> Bool
+ehBrancaOuVazia Vazia     = True
+ehBrancaOuVazia (Valor _) = True
+ehBrancaOuVazia _         = False
 
-getN :: [[Cell]] -> Int
-getN grid = maximum (map (\row -> length (filter isWhiteOrEmpty row)) grid)
+-- Descobre o limite máximo (N) de números permitidos
+descobrirNMaximo :: [[Celula]] -> Int
+descobrirNMaximo grade = maximum (map (\linha -> length (filter ehBrancaOuVazia linha)) grade)
 
-toBoard :: [[Cell]] -> Board
-toBoard rows = M.fromList
-    [ ((r, c), cell)
-    | (r, row) <- zip [0..] rows
-    , (c, cell) <- zip [0..] row ]
+-- Converte a matriz de listas para um Dicionário (Map) usando coordenadas
+criarTabuleiro :: [[Celula]] -> Tabuleiro
+criarTabuleiro linhas = M.fromList
+    [ ((lin, col), celula)
+    | (lin, linha) <- zip [0..] linhas
+    , (col, celula) <- zip [0..] linha ]
 
 -- ==========================================
--- 2. Motor de Busca Backtracking (Sem Monads)
+-- 2. Motor de Busca Backtracking 
 -- ==========================================
--- funcao que prepara o tabuleiro
-solveKakkuru :: [[Cell]] -> [Board]
-solveKakkuru grid = solve (toBoard grid) (getN grid)
 
-solve :: Board -> Int -> [Board]
-solve board n = go emptyPositions board
+-- Função principal que prepara o tabuleiro para a busca
+resolverSummen :: [[Celula]] -> [Tabuleiro]
+resolverSummen grade = tentarResolver (criarTabuleiro grade) (descobrirNMaximo grade)
+
+-- Motor de tentativa e erro (Backtracking)
+tentarResolver :: Tabuleiro -> Int -> [Tabuleiro]
+tentarResolver tab nMaximo = preencherPosicoes posicoesVazias tab
   where
-    emptyPositions = [p | (p, Empty) <- M.toList board]
+    posicoesVazias = [coord | (coord, Vazia) <- M.toList tab]
 
-    go :: [Pos] -> Board -> [Board]
-    go [] b = [b] 
-    go (p:ps) b = 
+    preencherPosicoes :: [Coordenada] -> Tabuleiro -> [Tabuleiro]
+    preencherPosicoes [] tabAtual = [tabAtual] 
+    preencherPosicoes (coordAtual:proximasCoords) tabAtual = 
         let 
-            gerarTentativa = \val -> M.insert p (Val val) b
-            todasTentativas = map gerarTentativa [1..n]
+            gerarTentativa = \num -> M.insert coordAtual (Valor num) tabAtual
+            todasTentativas = map gerarTentativa [1..nMaximo]
             
-            tentativasValidas = filter (\b' -> isValid b' n p) todasTentativas
+            tentativasValidas = filter (\tabTeste -> ehJogadaValida tabTeste nMaximo coordAtual) todasTentativas
             
-            continuarBusca = \bValido -> go ps bValido
+            continuarBusca = \tabValido -> preencherPosicoes proximasCoords tabValido
             
         in concat (map continuarBusca tentativasValidas)
 
---VALIDACOES ABAIXO
+-- ==========================================
+-- 3. Regras e Validações
+-- ==========================================
 
-isValid :: Board -> Int -> Pos -> Bool
-isValid b n (r, c) =
+-- Verifica se a jogada atual respeita as regras do jogo
+ehJogadaValida :: Tabuleiro -> Int -> Coordenada -> Bool
+ehJogadaValida tab nMaximo (lin, col) =
     let 
-        valCell = M.lookup (r,c) b
-    in case valCell of
-        Just (Val val) -> isUniqueInRow b r val && isUniqueInCol b c val && partialSumsOk b n
+        celulaAtual = M.lookup (lin,col) tab
+    in case celulaAtual of
+        Just (Valor num) -> numeroUnicoNaLinha tab lin num && 
+                            numeroUnicoNaColuna tab col num && 
+                            inspecionarSomas tab nMaximo
         _ -> False
         
---verfica se o numero (val) nao se repete na linha
-isUniqueInRow :: Board -> Int -> Int -> Bool
-isUniqueInRow b r val =
-    let naLinha = filter (\((r', _), cell) -> r' == r && cell == Val val) (M.toList b)
+-- Verifica se o número não se repete na linha
+numeroUnicoNaLinha :: Tabuleiro -> Int -> Int -> Bool
+numeroUnicoNaLinha tab lin num =
+    let naLinha = filter (\((l, _), cel) -> l == lin && cel == Valor num) (M.toList tab)
     in length naLinha == 1
     
---verfica se o numero (val) nao se repete na coluna
-isUniqueInCol :: Board -> Int -> Int -> Bool
-isUniqueInCol b c val =
-    let naColuna = filter (\((_, c'), cell) -> c' == c && cell == Val val) (M.toList b)
+-- Verifica se o número não se repete na coluna
+numeroUnicoNaColuna :: Tabuleiro -> Int -> Int -> Bool
+numeroUnicoNaColuna tab col num =
+    let naColuna = filter (\((_, c), cel) -> c == col && cel == Valor num) (M.toList tab)
     in length naColuna == 1
     
---vai atrás dos "BlockSum" e utiliza a funçao checkSum para verificar se ta correto
-partialSumsOk :: Board -> Int -> Bool
-partialSumsOk b n =
-    let blocos = filter isBlockSum (M.toList b)
-    in verificaTodos blocos
+-- Vai atrás dos "BlocoSoma" e utiliza a função 'calcularSomaVizinhos' para validar
+inspecionarSomas :: Tabuleiro -> Int -> Bool
+inspecionarSomas tab nMaximo =
+    let blocosComDica = filter ehBlocoSoma (M.toList tab)
+    in validarTodosOsBlocos blocosComDica
   where
-    isBlockSum ((_, BlockSum _)) = True
-    isBlockSum _ = False
+    ehBlocoSoma ((_, BlocoSoma _)) = True
+    ehBlocoSoma _ = False
     
-    verificaTodos [] = True
-    verificaTodos (bloco:resto) = checkSum b n bloco && verificaTodos resto
+    validarTodosOsBlocos [] = True
+    validarTodosOsBlocos (blocoAtual:resto) = calcularSomaVizinhos tab nMaximo blocoAtual && validarTodosOsBlocos resto
     
---verifica se a soma em volta de um "BlockSum" está correta
-checkSum :: Board -> Int -> (Pos, Cell) -> Bool
-checkSum b n (p, BlockSum target) =
+-- Verifica se a soma matemática ao redor de um "BlocoSoma" está correta (Calculadora)
+calcularSomaVizinhos :: Tabuleiro -> Int -> (Coordenada, Celula) -> Bool
+calcularSomaVizinhos tab nMaximo (coord, BlocoSoma alvo) =
     let 
-        neigs = getNeighbors p b
-        filled = [v | Val v <- neigs]
-        empties = length (filter (== Empty) neigs)
-        currentSum = sum filled
-    in if empties == 0
-       then currentSum == target 
-       else currentSum + (empties * 1) <= target && currentSum + (empties * n) >= target
-checkSum _ _ _ = True
+        vizinhos = pegarVizinhos coord tab
+        preenchidos = [v | Valor v <- vizinhos]
+        qtdVazios = length (filter (== Vazia) vizinhos)
+        somaAtual = sum preenchidos
+    in if qtdVazios == 0
+       then somaAtual == alvo 
+       else somaAtual + (qtdVazios * 1) <= alvo && somaAtual + (qtdVazios * nMaximo) >= alvo
+calcularSomaVizinhos _ _ _ = True
 
---pega as 8 casas vizinhas de uma certa posicao
-getNeighbors :: Pos -> Board -> [Cell]
-getNeighbors (r, c) b =
-    let posicoes = [(nr, nc) | nr <- [r-1 .. r+1], nc <- [c-1 .. c+1], (nr, nc) /= (r, c)]
-        celulas = map (\pos -> M.lookup pos b) posicoes
-        celulasValidas = [celula | Just celula <- celulas]
-    in filter isWhiteOrEmpty celulasValidas
+-- Pega as 8 casas vizinhas de uma certa coordenada
+pegarVizinhos :: Coordenada -> Tabuleiro -> [Celula]
+pegarVizinhos (lin, col) tab =
+    let coordsVizinhas = [(l, c) | l <- [lin-1 .. lin+1], c <- [col-1 .. col+1], (l, c) /= (lin, col)]
+        celulas = map (\coord -> M.lookup coord tab) coordsVizinhas
+        celulasValidas = [cel | Just cel <- celulas]
+    in filter ehBrancaOuVazia celulasValidas
 
---converte cada casa numa string
-formatCell :: Cell -> String
-formatCell Empty        = "   "
-formatCell (Val v)      = " " ++ show v ++ " "
-formatCell Block        = "[B]"
-formatCell (BlockSum s) = "[B" ++ show s ++ "]"
+-- ==========================================
+-- 4. Funções de Impressão e Main
+-- ==========================================
 
---imprime linha por linha 
-printBoard :: Int -> Int -> Board -> IO ()
-printBoard rows cols b = mapM_ putStrLn 
-    [ intercalate " | " [ formatCell (b M.! (r, c)) | c <- [0..cols-1] ]
-    | r <- [0..rows-1] ]
+-- Converte cada casa numa string para exibição
+formatarCelula :: Celula -> String
+formatarCelula Vazia         = "   "
+formatarCelula (Valor v)     = " " ++ show v ++ " "
+formatarCelula BlocoPreto    = "[B]"
+formatarCelula (BlocoSoma s) = "[B" ++ show s ++ "]"
+
+-- Imprime linha por linha 
+imprimirTabuleiro :: Int -> Int -> Tabuleiro -> IO ()
+imprimirTabuleiro linhas colunas tab = mapM_ putStrLn 
+    [ intercalate " | " [ formatarCelula (tab M.! (lin, col)) | col <- [0..colunas-1] ]
+    | lin <- [0..linhas-1] ]
 
 main :: IO ()
 main = do
-    let example = [
-            [Empty, BlockSum 11, BlockSum 9, Empty, BlockSum 14, Empty, Empty, Empty],
-            [Empty, Empty, Empty, BlockSum 17, Empty, Empty, BlockSum 18, BlockSum 12],
-            [Empty, BlockSum 17, BlockSum 18, Empty, Empty, BlockSum 14, Empty, Empty],
-            [BlockSum 12, Empty, BlockSum 16, Empty, BlockSum 16, Empty, Empty, Empty],
-            [Empty, Empty, Empty, BlockSum 15, Empty, BlockSum 16, Empty, BlockSum 9],
-            [BlockSum 12, Empty, Empty, Empty, BlockSum 10, Empty, BlockSum 18, Empty],
-            [Empty, BlockSum 20, Empty, BlockSum 20, Empty, BlockSum 16, Empty, Empty],
-            [BlockSum 6, Empty, Empty, Empty, Empty, Empty, BlockSum 11, BlockSum 9]
+    let exemploSummen = [
+            [Vazia, BlocoSoma 11, BlocoSoma 9, Vazia, BlocoSoma 14, Vazia, Vazia, Vazia],
+            [Vazia, Vazia, Vazia, BlocoSoma 17, Vazia, Vazia, BlocoSoma 18, BlocoSoma 12],
+            [Vazia, BlocoSoma 17, BlocoSoma 18, Vazia, Vazia, BlocoSoma 14, Vazia, Vazia],
+            [BlocoSoma 12, Vazia, BlocoSoma 16, Vazia, BlocoSoma 16, Vazia, Vazia, Vazia],
+            [Vazia, Vazia, Vazia, BlocoSoma 15, Vazia, BlocoSoma 16, Vazia, BlocoSoma 9],
+            [BlocoSoma 12, Vazia, Vazia, Vazia, BlocoSoma 10, Vazia, BlocoSoma 18, Vazia],
+            [Vazia, BlocoSoma 20, Vazia, BlocoSoma 20, Vazia, BlocoSoma 16, Vazia, Vazia],
+            [BlocoSoma 6, Vazia, Vazia, Vazia, Vazia, Vazia, BlocoSoma 11, BlocoSoma 9]
           ]
     
-    putStrLn "=== Resolvendo Kakkuru (Haskell Clássico) ===\n"
-    let solutions = solveKakkuru example
+    putStrLn "=== Resolvendo Summen ===\n"
+    let solucoes = resolverSummen exemploSummen
     
-    if null solutions
+    if null solucoes
         then putStrLn "Nenhuma solução encontrada."
         else do
             putStrLn "Solução Encontrada:"
-            printBoard 8 8 (head solutions)
+            imprimirTabuleiro 8 8 (head solucoes)
