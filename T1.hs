@@ -73,9 +73,11 @@ tentarResolver tab nMaximo = preencherPosicoes posicoesVazias tab
         --junta as tentativas que conseguiram chegar no fim
         in concat (map continuarBusca tentativasValidas)
 
--- ==========================================
--- 3. Regras e Validações
--- ==========================================
+
+-- fim luisa
+-- ......................................................................
+-- inicio vinicius
+--Regras e Validações
 
 -- Verifica se a jogada atual respeita as regras do jogo
 ehJogadaValida :: Tabuleiro -> Int -> Coordenada -> Bool
