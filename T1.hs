@@ -6,7 +6,6 @@ import Data.List (intercalate)
 data Celula 
     = Vazia          -- casa vazia para colocar um numero
     | Valor Int      -- casa preenchida com um numero
-    | BlocoPreto     -- bloco preto sem dica
     | BlocoSoma Int  -- bloco preto com dica de soma
     deriving (Eq, Show) -- para poder usar operacoes de igualdade e pode converter pra texto
 
@@ -27,7 +26,7 @@ descobrirNMaximo grade = length (filter ehBrancaOuVazia (head grade)) --filter d
 criarTabuleiro :: [[Celula]] -> Tabuleiro -- pega a matriz de celulas e retorna tabuleiro
 criarTabuleiro grade = M.fromList coordenadasFinais --retorna grade, e transforma coordenadas finais num dicionario
   where
-    -- numera cada linha do tabuleiro tipo [(0, BlocoPreto, Vazia), (1, Vazia, Vazia), ...]
+    -- numera cada linha do tabuleiro tipo [(0, BlocoSoma 10, Vazia), (1, Vazia, Vazia), ...]
     linhasNumeradas = zip [0..] grade
     
     -- numera cada coluna e junta para fazer a coordenada da casa
@@ -138,7 +137,6 @@ pegarVizinhos (lin, col) tab =
 formatarCelula :: Celula -> String
 formatarCelula Vazia         = "   "
 formatarCelula (Valor v)     = " " ++ show v ++ " "
-formatarCelula BlocoPreto    = "[B]"
 formatarCelula (BlocoSoma s) = "[B" ++ show s ++ "]"
 
 -- Imprime linha por linha 
