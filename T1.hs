@@ -77,21 +77,23 @@ tentarResolver tab nMaximo = preencherPosicoes posicoesVazias tab -- a funcao pr
 ehJogadaValida :: Tabuleiro -> Int -> Coordenada -> Bool
 ehJogadaValida tab nMaximo (lin, col) =
     let 
-        celulaAtual = M.lookup (lin,col) tab
-    in case celulaAtual of
-        Just (Valor num) -> numeroUnicoNaLinha tab lin num && 
-                            numeroUnicoNaColuna tab col num && 
-                            inspecionarSomas tab nMaximo
-        _ -> False
+        celulaAtual = M.lookup (lin,col) tab --busca conteudo da celula que acabamos de preencher
+    in case celulaAtual of --se for um número checamos as 3 regras
+        Just (Valor num) -> numeroUnicoNaLinha tab lin num && -- não repete na linha
+                            numeroUnicoNaColuna tab col num && -- não repete na coluna
+                            inspecionarSomas tab nMaximo -- não invalida as dicas de soma
+        _ -> False -- controle de erros
         
 -- Verifica se o número não se repete na linha
 numeroUnicoNaLinha :: Tabuleiro -> Int -> Int -> Bool
 numeroUnicoNaLinha tab lin num =
+    -- Filtra as casas do tabuleiro pra pegar SÓ as que estao na mesma linha ('l == lin') e tem o mesmo valor ('cel == Valor num')
     let naLinha = filter (\((l, _), cel) -> l == lin && cel == Valor num) (M.toList tab)
+    -- Como acabamos de inserir esse numero ele tem que aparecer EXATAMENTE 1 vez -> se for mais, ele repetiu
     in length naLinha == 1
     
 -- Verifica se o número não se repete na coluna
-numeroUnicoNaColuna :: Tabuleiro -> Int -> Int -> Bool
+numeroUnicoNaColuna :: Tabuleiro -> Int -> Int -> Bool -- mesma ideida do unico na linha
 numeroUnicoNaColuna tab col num =
     let naColuna = filter (\((_, c), cel) -> c == col && cel == Valor num) (M.toList tab)
     in length naColuna == 1
@@ -99,39 +101,46 @@ numeroUnicoNaColuna tab col num =
 -- Vai atrás dos "BlocoSoma" e utiliza a função 'calcularSomaVizinhos' para validar
 inspecionarSomas :: Tabuleiro -> Int -> Bool
 inspecionarSomas tab nMaximo =
+    -- Filtra o tabuleiro inteiro pra separar numa lista só os blocos que tem dica de soma
     let blocosComDica = filter ehBlocoSoma (M.toList tab)
-    in validarTodosOsBlocos blocosComDica
+    in validarTodosOsBlocos blocosComDica -- Passa essa lista pra funcao abaixo conferir um por um
   where
+    -- auxiliar que reconhece o que é bloco de soma
     ehBlocoSoma ((_, BlocoSoma _)) = True
     ehBlocoSoma _ = False
     
-    validarTodosOsBlocos [] = True
+    validarTodosOsBlocos [] = True -- recursiva para varrer a lista de blocos
+    -- pega o primeiro bloco (blocoAtual), confere ele, E (&&) chama a funcao pro restante da lista (resto)
     validarTodosOsBlocos (blocoAtual:resto) = calcularSomaVizinhos tab nMaximo blocoAtual && validarTodosOsBlocos resto
     
 -- Verifica se a soma matemática ao redor de um "BlocoSoma" está correta (Calculadora)
 calcularSomaVizinhos :: Tabuleiro -> Int -> (Coordenada, Celula) -> Bool
 calcularSomaVizinhos tab nMaximo (coord, BlocoSoma alvo) =
     let 
-        vizinhos = pegarVizinhos coord tab
-        preenchidos = [v | Valor v <- vizinhos]
-        qtdVazios = length (filter (== Vazia) vizinhos)
-        somaAtual = sum preenchidos
-    in if qtdVazios == 0
+        vizinhos = pegarVizinhos coord tab -- Pega as casas que estao em volta do bloco
+        preenchidos = [v | Valor v <- vizinhos] -- Extrai apenas os numeros das casas vizinhas que ja jogamos
+        qtdVazios = length (filter (== Vazia) vizinhos) -- Conta quantas casas em volta do bloco ainda estao em branco
+        somaAtual = sum preenchidos -- Soma matematica dos valores ja jogados
+    in if qtdVazios == 0 -- Se nao tem mais espaco pra jogar, a soma bate exatamente com o alvo?
        then somaAtual == alvo 
+       -- Se AINDA TEM espaco pra jogar, a gente faz uma previsao pra ver se ainda está no intervalo possível:
+       -- 1. A soma atual + (pior cenario jogando numero 1) NAO pode ultrapassar o alvo
+       -- 2. A soma atual + (melhor cenario jogando nMaximo) TEM que conseguir alcancar o alvo
        else somaAtual + (qtdVazios * 1) <= alvo && somaAtual + (qtdVazios * nMaximo) >= alvo
-calcularSomaVizinhos _ _ _ = True
+calcularSomaVizinhos _ _ _ = True -- Tratamento de seguranca: se chamar a funcao pra algo que nao é BlocoSoma, só ignora
 
 -- Pega as 8 casas vizinhas de uma certa coordenada
 pegarVizinhos :: Coordenada -> Tabuleiro -> [Celula]
 pegarVizinhos (lin, col) tab =
     let coordsVizinhas = [(l, c) | l <- [lin-1 .. lin+1], c <- [col-1 .. col+1], (l, c) /= (lin, col)]
+        -- pega arredores (linha -1 ate +1, coluna -1 ate +1) e ignora o centro (/= lin, col)
         celulas = map (\coord -> M.lookup coord tab) coordsVizinhas
+        -- Remove as que cairam fora do mapa (acima da linha 0, retorna Nothing)
         celulasValidas = [cel | Just cel <- celulas]
+    -- Pega essas casas vizinhas que existem e retorna apenas as que importam para jogar/somar (Tira os blocos pretos vizinhos)
     in filter ehBrancaOuVazia celulasValidas
 
--- ==========================================
--- 4. Funções de Impressão e Main
--- ==========================================
+--Impressão e Main
 
 -- Converte cada casa numa string para exibição
 formatarCelula :: Celula -> String
@@ -141,7 +150,7 @@ formatarCelula (BlocoSoma s) = "[B" ++ show s ++ "]"
 
 -- Imprime linha por linha 
 imprimirTabuleiro :: Int -> Int -> Tabuleiro -> IO ()
-imprimirTabuleiro linhas colunas tab = mapM_ putStrLn 
+imprimirTabuleiro linhas colunas tab = mapM_ putStrLn  -- Cada string é uma linha do tabuleiro
     [ intercalate " | " [ formatarCelula (tab M.! (lin, col)) | col <- [0..colunas-1] ]
     | lin <- [0..linhas-1] ]
 
@@ -156,7 +165,7 @@ main = do
             [BlocoSoma 12, Vazia, Vazia, Vazia, BlocoSoma 10, Vazia, BlocoSoma 18, Vazia],
             [Vazia, BlocoSoma 20, Vazia, BlocoSoma 20, Vazia, BlocoSoma 16, Vazia, Vazia],
             [BlocoSoma 6, Vazia, Vazia, Vazia, Vazia, Vazia, BlocoSoma 11, BlocoSoma 9]
-          ]
+          ] -- estado inicial
     
     putStrLn "=== Resolvendo Summen ===\n"
     let solucoes = resolverSummen exemploSummen
@@ -165,4 +174,4 @@ main = do
         then putStrLn "Nenhuma solução encontrada."
         else do
             putStrLn "Solução Encontrada:"
-            imprimirTabuleiro 8 8 (head solucoes)
+            imprimirTabuleiro 8 8 (head solucoes) -- é o primeiro tabuleiro q deu certo
